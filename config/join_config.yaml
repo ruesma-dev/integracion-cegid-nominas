@@ -7,63 +7,280 @@ tables:
   empleados: DimEmpleados
 
 extract:
-  # “Mes indicado” (year/month) se computa como:
-  # desde el 16 del mes anterior (inclusive) hasta el 15 del mes indicado (inclusive)
   partes_filter:
     column: fec
     year: 2025
     month: 12
 
-# Plantillas de entrada (múltiples)
 templates:
   input_dir: input
-  pattern: "*.xlsx"           # por ejemplo: "base_*.xlsx" si quieres filtrar
-  output_subdir: plantillas   # se guardará en output/plantillas
-  sheet: ""                   # vacío = hoja activa; o nombre exacto de hoja
+  pattern: "*.xlsx"
+  output_subdir: plantillas
+  sheet: ""
 
-calendar:
-  holidays_by_year:
-    "2025":
-      - "2025-01-01"
-      - "2025-01-06"
-      - "2025-02-28"
-      - "2025-04-17"
-      - "2025-04-18"
-      - "2025-05-01"
-      - "2025-05-02"
-      - "2025-05-07"
-      - "2025-06-19"
-      - "2025-06-20"
-      - "2025-08-15"
-      - "2025-10-13"
-      - "2025-11-01"
-      - "2025-12-06"
-      - "2025-12-08"
-      - "2025-12-25"
-      - "2025-12-26"
-      - "2025-12-31"
-    "2026":
-      - "2026-01-01"
-      - "2026-01-02"
-      - "2026-01-05"
-      - "2026-01-06"
-      - "2026-04-02"
-      - "2026-04-03"
-      - "2026-04-06"
-      - "2026-05-01"
-      - "2026-05-02"
-      - "2026-05-14"
-      - "2026-05-15"
-      - "2026-08-14"
-      - "2026-08-15"
-      - "2026-10-12"
-      - "2026-11-02"
-      - "2026-11-09"
-      - "2026-12-07"
-      - "2026-12-08"
-      - "2026-12-24"
-      - "2026-12-25"
-      - "2026-12-31"
+convenios:
+  # Si un DNI no se encuentra en los excels de input, o el CCC no está mapeado,
+  # se usará este convenio por defecto.
+  default: "SEVILLA"
+
+  ccc_to_convenio:
+    "03115909677": "ALICANTE"
+    "19101622946": "GUADALAJARA"
+    "28121849067": "MADRID"
+    "29123556246": "MALAGA"
+    "41136658662": "SEVILLA"
+    "45105286451": "TOLEDO"
+
+    "28237797211": "MADRID"
+    "29146179171": "MALAGA"
+    "41141435005": "SEVILLA"
+    "45117257463": "TOLEDO"
+
+    "28212249431": "MADRID"
+
+  calendars:
+    # ---------------------------------------------------------------------
+    # MADRID (Construcción y Obras Públicas)
+    # PDFs: 2025 y 2026 adjuntos. :contentReference[oaicite:2]{index=2} :contentReference[oaicite:3]{index=3}
+    # ---------------------------------------------------------------------
+    MADRID:
+      holidays_by_year:
+        "2025":
+          # Festivos + no laborables de convenio indicados en el calendario 2025. :contentReference[oaicite:4]{index=4}
+          - "2025-01-01"
+          - "2025-01-06"
+          - "2025-01-07"   # no laborable convenio
+
+          - "2025-04-17"
+          - "2025-04-18"
+          - "2025-04-21"   # no laborable convenio
+
+          - "2025-05-01"
+          - "2025-05-02"
+          - "2025-05-15"   # festivo local (Madrid capital)
+          - "2025-05-16"   # festivo de convenio
+
+          - "2025-08-15"
+
+          # Nota: el calendario marca festivos y además define 31/10 como no laborable convenio. :contentReference[oaicite:5]{index=5}
+          - "2025-10-31"   # no laborable convenio
+
+          - "2025-11-01"
+          - "2025-11-10"   # no laborable no recuperable (marcado en calendario)
+
+          - "2025-12-06"
+          - "2025-12-08"
+          - "2025-12-24"   # no laborable convenio
+          - "2025-12-25"
+          - "2025-12-26"   # no laborable convenio
+          - "2025-12-31"   # no laborable convenio
+
+        "2026":
+          # Festivos + no laborables de convenio indicados en el calendario 2026. :contentReference[oaicite:6]{index=6}
+          - "2026-01-01"
+          - "2026-01-02"   # no laborable convenio
+          - "2026-01-05"   # no laborable convenio
+          - "2026-01-06"
+
+          - "2026-04-02"
+          - "2026-04-03"
+          - "2026-04-06"   # no laborable convenio
+
+          - "2026-05-01"
+          - "2026-05-02"
+          - "2026-05-14"
+          - "2026-05-15"
+
+          - "2026-08-14"   # no laborable convenio
+          - "2026-08-15"
+
+          - "2026-10-12"
+
+          - "2026-11-02"
+          - "2026-11-09"
+
+          - "2026-12-07"
+          - "2026-12-08"
+          - "2026-12-24"   # no laborable convenio
+          - "2026-12-25"
+          - "2026-12-31"   # no laborable convenio
+
+    # ---------------------------------------------------------------------
+    # Resto de convenios: placeholders hasta que adjuntes PDFs 2025/2026
+    # ---------------------------------------------------------------------
+    ALICANTE:
+      holidays_by_year:
+        "2025": []
+        "2026":
+          # Basado en el Calendario Construcción Alicante 2026
+          # Incluye festivos nacionales/autonómicos y días verdes (por convenio)
+          - "2026-01-01"  # Año Nuevo
+          - "2026-01-02"  # Festivo por convenio
+          - "2026-01-05"  # Festivo por convenio
+          - "2026-01-06"  # Epifanía del Señor
+          - "2026-03-19"  # San José
+          - "2026-04-03"  # Viernes Santo
+          - "2026-04-06"  # Lunes de Pascua
+          - "2026-04-16"  # Santa Faz (Festivo local habitual en Alicante)
+          - "2026-05-01"  # Fiesta del Trabajo
+          - "2026-06-23"  # Hogueras de San Juan (Festivo local/Convenio)
+          - "2026-06-24"  # San Juan
+          - "2026-08-15"  # Asunción de la Virgen
+          - "2026-10-09"  # Día de la Comunidad Valenciana
+          - "2026-10-12"  # Fiesta Nacional de España
+          - "2026-12-08"  # Inmaculada Concepción
+          - "2026-12-24"  # Festivo por convenio
+          - "2026-12-25"  # Natividad del Señor
+          - "2026-12-31"  # Festivo por convenio
+
+    GUADALAJARA:
+      holidays_by_year:
+        "2025":
+          # Fuente: Calendario laboral orientativo 2025 (BOP Guadalajara).
+          # Incluye: F.N (Fiesta Nacional), F.R (Fiesta C-LM), F.L (Local Guadalajara), N.L (No laborable construcción). :contentReference[oaicite:2]{index=2}
+          - "2025-01-01"  # F.N
+          - "2025-01-06"  # F.N
+
+          - "2025-03-31"  # F.R (Castilla-La Mancha)
+
+          - "2025-04-17"  # F.R (C-LM)
+          - "2025-04-18"  # F.N
+
+          - "2025-05-01"  # F.N
+          - "2025-05-02"  # N.L (no laborable construcción)
+
+          - "2025-06-19"  # F.R (C-LM)
+          - "2025-06-20"  # N.L (no laborable construcción)
+
+          - "2025-08-15"  # F.N
+
+          - "2025-09-08"  # F.L (Guadalajara capital)
+          - "2025-09-19"  # F.L (Guadalajara capital)
+
+          - "2025-11-01"  # F.N
+
+          - "2025-12-08"  # F.N
+          - "2025-12-24"  # N.L (no laborable construcción)
+          - "2025-12-25"  # F.N
+          - "2025-12-26"  # N.L (no laborable construcción)
+          - "2025-12-31"  # N.L (no laborable construcción)
+        "2026": [ ]
+
+    MALAGA:
+      holidays_by_year:
+        "2025":
+          # Festivos y especiales del calendario del convenio 2025 (Corregido según PDF).
+          - "2025-01-01"  # Año nuevo
+          - "2025-01-06"  # Epifanía del Señor
+          - "2025-02-28"  # Día de Andalucía
+          - "2025-04-17"  # Jueves Santo
+          - "2025-04-18"  # Viernes Santo
+          - "2025-05-01"  # Fiesta del Trabajo
+          - "2025-05-02"  # Día inhábil de convenio (Puente de Mayo)
+          - "2025-08-15"  # Asunción de la Virgen
+          - "2025-08-18"  # Día inhábil de convenio (Lunes de Feria)
+          - "2025-08-19"  # Festivo Local - Málaga Capital (Toma de Málaga)
+          - "2025-09-08"  # Festivo Local - Málaga Capital (Virgen de la Victoria)
+          - "2025-10-13"  # Fiesta Nacional de España (Lunes siguiente al festivo)
+          - "2025-11-01"  # Todos los Santos
+          - "2025-12-06"  # Día de la Constitución
+          - "2025-12-08"  # Inmaculada Concepción
+          - "2025-12-24"  # Día inhábil de convenio (Nochebuena)
+          - "2025-12-25"  # Natividad del Señor
+          - "2025-12-26"  # Día inhábil de convenio (Viernes post-Navidad)
+          - "2025-12-31"  # Día inhábil de convenio (Nochevieja)
+
+        "2026":
+          # Festivos y especiales del calendario del convenio 2026 (Según PDF).
+          # Nota: Días inhábiles (NL) extraídos del texto al pie: 2 y 5 Enero, 7 Sept, 24 y 31 Dic.
+          - "2026-01-01"  # Año Nuevo
+          - "2026-01-02"  # Día inhábil de convenio
+          - "2026-01-05"  # Día inhábil de convenio (Víspera de Reyes)
+          - "2026-01-06"  # Epifanía del Señor
+          - "2026-02-28"  # Día de Andalucía
+          - "2026-04-02"  # Jueves Santo
+          - "2026-04-03"  # Viernes Santo
+          - "2026-05-01"  # Fiesta del Trabajo
+          - "2026-08-15"  # Asunción de la Virgen
+          - "2026-08-19"  # Festivo Local - Málaga Capital (Toma de Málaga)
+          - "2026-09-07"  # Día inhábil de convenio (Puente de la Victoria)
+          - "2026-09-08"  # Festivo Local - Málaga Capital (Virgen de la Victoria)
+          - "2026-10-12"  # Fiesta Nacional de España
+          - "2026-11-01"  # Todos los Santos
+          - "2026-12-06"  # Día de la Constitución
+          - "2026-12-08"  # Inmaculada Concepción
+          - "2026-12-24"  # Día inhábil de convenio (Nochebuena)
+          - "2026-12-25"  # Natividad del Señor
+          - "2026-12-31"  # Día inhábil de convenio (Nochevieja)
+
+    SEVILLA:
+      holidays_by_year:
+        "2025":
+          # Festivos y especiales del calendario del convenio 2025. :contentReference[oaicite:1]{index=1}
+          - "2025-01-01"  # Año nuevo
+          - "2025-01-06"  # Epifanía
+          - "2025-02-28"  # Día de Andalucía
+          - "2025-04-17"  # Jueves Santo
+          - "2025-04-18"  # Viernes Santo
+          - "2025-05-01"  # Día del Trabajador
+          - "2025-05-02"  # Día inhábil de convenio
+          - "2025-05-07"  # Miércoles Feria (festivo local)
+          - "2025-06-19"  # Corpus Christi (festivo local)
+          - "2025-06-20"  # Día inhábil de convenio
+          - "2025-08-15"  # Asunción
+          - "2025-10-13"  # Fiesta Nacional de España (observada)
+          - "2025-11-01"  # Todos los Santos
+          - "2025-12-06"  # Constitución
+          - "2025-12-08"  # Inmaculada
+          - "2025-12-25"  # Navidad
+          - "2025-12-26"  # Día inhábil de convenio
+          - "2025-12-31"  # Día inhábil de convenio
+
+        "2026":
+          # Según calendario Sevilla 2026 adjunto (imagen).
+          - "2026-01-01"  # Año nuevo
+          - "2026-01-02"  # Inhábil de convenio
+          - "2026-01-05"  # Inhábil de convenio
+          - "2026-01-06"  # Epifanía
+
+          - "2026-04-02"  # Jueves Santo
+          - "2026-04-03"  # Viernes Santo
+          - "2026-04-22"  # Feria (festivo local Sevilla)
+
+          - "2026-05-01"  # Día del Trabajador
+
+          - "2026-06-04"  # Corpus (festivo local Sevilla)
+
+          - "2026-10-12"  # Fiesta Nacional de España
+
+          - "2026-11-02"  # Todos los Santos (observada)
+
+          - "2026-12-07"  # Constitución (observada)
+          - "2026-12-08"  # Inmaculada
+          - "2026-12-25"  # Navidad
+
+    TOLEDO:
+      holidays_by_year:
+        "2025": []
+        "2026":
+          # Basado en el Calendario Construcción Provincia de Toledo 2026
+          # Incluye FN (Nacionales), FA (Autonómicos) y FC (Convenio)
+          - "2026-01-01"  # Año Nuevo (FN)
+          - "2026-01-02"  # Festivo Convenio (FC)
+          - "2026-01-05"  # Festivo Convenio (FC)
+          - "2026-01-06"  # Epifanía del Señor (FN)
+          - "2026-04-02"  # Jueves Santo (FN)
+          - "2026-04-03"  # Viernes Santo (FN)
+          - "2026-05-01"  # Fiesta del Trabajo (FN)
+          - "2026-06-04"  # Corpus Christi (FA)
+          - "2026-08-15"  # Asunción de la Virgen (FN)
+          - "2026-10-12"  # Fiesta Nacional de España (FN)
+          - "2026-11-02"  # Lunes siguiente a Todos los Santos (FN - Traslado)
+          - "2026-12-07"  # Festivo Convenio (FC - Puente Constitución)
+          - "2026-12-08"  # Inmaculada Concepción (FN)
+          - "2026-12-24"  # Festivo Convenio (FC - Nochebuena)
+          - "2026-12-25"  # Natividad del Señor (FN)
+          - "2026-12-31"  # Festivo Convenio (FC - Nochevieja)
 
 joins:
   join_1:

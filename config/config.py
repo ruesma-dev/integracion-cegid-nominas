@@ -34,6 +34,9 @@ class JoinConfig:
     def templates(self) -> dict:
         return self.raw.get("templates", {})
 
+    @property
+    def convenios(self) -> dict:
+        return self.raw.get("convenios", {})
 
 class Config:
     def __init__(self) -> None:

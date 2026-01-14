@@ -9,7 +9,10 @@ from typing import List
 import pandas as pd
 
 from config.config import Config
-from application.use_cases.fill_template_excel_use_case import FillTemplateExcelUseCase, TemplateFillResult
+from application.use_cases.fill_template_excel_use_case import (
+    FillTemplateExcelUseCase,
+    TemplateFillResult,
+)
 
 log = logging.getLogger(__name__)
 
@@ -17,13 +20,10 @@ log = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class BatchFillResult:
     outputs: List[TemplateFillResult]
+    skipped: List[Path]
 
 
 class FillTemplatesBatchUseCase:
-    """
-    Lee múltiples plantillas en input_dir/pattern y genera una salida por cada una.
-    """
-
     def __init__(self, *, config: Config, fill_uc: FillTemplateExcelUseCase) -> None:
         self._config = config
         self._fill_uc = fill_uc
@@ -42,23 +42,50 @@ class FillTemplatesBatchUseCase:
             raise FileNotFoundError(f"No se encontraron plantillas en {input_dir} con patrón '{pattern}'")
 
         out_dir = self._config.output_templates_dir()
-        results: List[TemplateFillResult] = []
+
+        outputs: List[TemplateFillResult] = []
+        skipped: List[Path] = []
 
         for tpl in templates:
-            output_path = out_dir / tpl.name  # mismo nombre en output/plantillas
-            res = self._fill_uc(
+            output_path = out_dir / tpl.name
+
+            # 1) Dry-run para saber si habría inserciones
+            preview = self._fill_uc(
                 template_path=tpl,
                 output_path=output_path,
                 grouped_df=grouped_df,
                 sheet_name=sheet_name,
-            )
-            results.append(res)
-            log.info(
-                "Plantilla procesada: %s -> %s | filas=%s | dnis_sin_datos=%s",
-                tpl.name,
-                output_path.name,
-                res.filled_rows,
-                res.missing_dnis,
+                save=False,
             )
 
-        return BatchFillResult(outputs=results)
+            # Si no hay ningún trabajador del excel con horas extra => NO generar
+            if preview.inserted_rows == 0:
+                skipped.append(tpl)
+                log.info(
+                    "Plantilla omitida (sin horas extra para DNIs del excel): %s | matched=%s | missing=%s",
+                    tpl.name,
+                    preview.matched_rows,
+                    preview.missing_dnis,
+                )
+                continue
+
+            # 2) Guardado real
+            saved = self._fill_uc(
+                template_path=tpl,
+                output_path=output_path,
+                grouped_df=grouped_df,
+                sheet_name=sheet_name,
+                save=True,
+            )
+            outputs.append(saved)
+
+            log.info(
+                "Plantilla generada: %s -> %s | inserted=%s | matched=%s | missing=%s",
+                tpl.name,
+                output_path.name,
+                saved.inserted_rows,
+                saved.matched_rows,
+                saved.missing_dnis,
+            )
+
+        return BatchFillResult(outputs=outputs, skipped=skipped)

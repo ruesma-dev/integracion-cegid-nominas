@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
+from typing import Dict
 
 import pandas as pd
 
-from application.services.calendar_laboral import CalendarLaboral
+from application.services.convenio_calendar import ConvenioCalendar
 from utils.columns import resolve_column
 
 
@@ -16,16 +18,10 @@ class FilterAggregateResult:
 
 
 class FilterAndAggregateUseCase:
-    """
-    1) Filtra filas donde res_tipo_hora contiene 'HORA EXTRA'
-    2) Crea columnas 'festivo' y 'laborable' (según fec y calendario)
-    3) Agrupa por DNI y cod, sumando can (y también festivo/laborable)
-    """
-
-    def __init__(self, *, calendar: CalendarLaboral) -> None:
+    def __init__(self, *, calendar: ConvenioCalendar) -> None:
         self._calendar = calendar
 
-    def __call__(self, df: pd.DataFrame) -> FilterAggregateResult:
+    def __call__(self, df: pd.DataFrame, *, dni_to_convenio: Dict[str, str]) -> FilterAggregateResult:
         if df.empty:
             return FilterAggregateResult(detail_df=df, grouped_df=df)
 
@@ -36,35 +32,36 @@ class FilterAndAggregateUseCase:
         if detail.empty:
             return FilterAggregateResult(detail_df=detail, grouped_df=detail.copy())
 
-        # columnas base
         fec_col = resolve_column(detail, "fec")
         can_col = resolve_column(detail, "can")
         dni_col = resolve_column(detail, "dni")
-        cod_col = self._resolve_cod(detail)
+        cod_col = resolve_column(detail, "cod", alternatives=["cod_tipo_hora"])
 
-        # aseguramos res_empleado (para el excel detalle)
-        # si no existiera, explotará aquí con un error claro
-        _ = resolve_column(detail, "res_empleado")
+        # normalización DNI
+        detail[dni_col] = detail[dni_col].astype(str).str.strip().str.upper()
 
-        # normaliza fecha (date) desde timestamp
         fec_dt = pd.to_datetime(detail[fec_col], errors="coerce")
         dates = fec_dt.dt.date
 
-        is_festivo = dates.apply(
-            lambda d: False if d is None else self._calendar.is_festivo_o_fin_semana(d)
-        )
+        def is_festivo_row(d: date, dni: str) -> bool:
+            if d is None:
+                return False
+            convenio = dni_to_convenio.get(dni, self._calendar.default_convenio)
+            return self._calendar.is_festivo_o_fin_semana(convenio, d)
 
-        # columnas nuevas
-        detail["festivo"] = detail[can_col].where(is_festivo, 0)
-        detail["laborable"] = detail[can_col].where(~is_festivo, 0)
+        is_festivo = [
+            is_festivo_row(d, dni)
+            for d, dni in zip(dates.tolist(), detail[dni_col].tolist())
+        ]
 
-        res_empleado_col = resolve_column(detail, "res_empleado")
+        detail["festivo"] = detail[can_col].where(pd.Series(is_festivo, index=detail.index), 0)
+        detail["laborable"] = detail[can_col].where(~pd.Series(is_festivo, index=detail.index), 0)
 
         grouped = (
             detail.groupby([dni_col, cod_col], dropna=False, as_index=False)
             .agg(
-                res_empleado=(res_empleado_col, "first"),
-                can=("{}".format(can_col), "sum"),
+                res_empleado=("res_empleado", "first"),
+                can=(can_col, "sum"),
                 festivo=("festivo", "sum"),
                 laborable=("laborable", "sum"),
             )
@@ -72,11 +69,3 @@ class FilterAndAggregateUseCase:
         )
 
         return FilterAggregateResult(detail_df=detail, grouped_df=grouped)
-
-    @staticmethod
-    def _resolve_cod(df: pd.DataFrame) -> str:
-        return resolve_column(
-            df,
-            "cod",
-            alternatives=["cod_tipo_hora", "codtipohora", "codtipo_hora"],
-        )

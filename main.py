@@ -5,13 +5,16 @@ import logging
 import sys
 
 from application.pipeline import Pipeline, Step
-from application.services.calendar_laboral import CalendarLaboral
+from application.services.convenio_calendar import ConvenioCalendar
 from application.use_cases.extract_tables_use_case import ExtractTablesUseCase
-from application.use_cases.filter_and_aggregate_use_case import FilterAndAggregateUseCase
 from application.use_cases.export_excel_use_case import ExportExcelUseCase
-from application.use_cases.transform_join_use_case import TransformJoinUseCase
+from application.use_cases.filter_and_aggregate_use_case import FilterAndAggregateUseCase
 from application.use_cases.fill_template_excel_use_case import FillTemplateExcelUseCase
 from application.use_cases.fill_templates_batch_use_case import FillTemplatesBatchUseCase
+from application.use_cases.read_worker_convenio_from_templates_use_case import (
+    ReadWorkerConvenioFromTemplatesUseCase,
+)
+from application.use_cases.transform_join_use_case import TransformJoinUseCase
 from config.config import Config
 from infrastructure.pg_gateway import PostgresGateway
 
@@ -26,19 +29,23 @@ def step_init(ctx: dict) -> dict:
     gateway = PostgresGateway(config=config)
     gateway.test_connection()
 
-    calendar = CalendarLaboral.from_config(config)
+    convenio_calendar = ConvenioCalendar.from_config(config)
 
     ctx["config"] = config
     ctx["gateway"] = gateway
 
     ctx["extract_uc"] = ExtractTablesUseCase(gateway=gateway, config=config)
     ctx["transform_uc"] = TransformJoinUseCase(config=config)
-    ctx["filter_agg_uc"] = FilterAndAggregateUseCase(calendar=calendar)
 
-    # Mantiene los 2 excels previos (detalle/resumen)
+    ctx["read_convenios_uc"] = ReadWorkerConvenioFromTemplatesUseCase(
+        config=config,
+        convenio_calendar=convenio_calendar,
+    )
+
+    ctx["filter_agg_uc"] = FilterAndAggregateUseCase(calendar=convenio_calendar)
+
     ctx["export_uc"] = ExportExcelUseCase(config=config)
 
-    # Plantillas múltiples (batch)
     fill_one_uc = FillTemplateExcelUseCase()
     ctx["fill_templates_uc"] = FillTemplatesBatchUseCase(config=config, fill_uc=fill_one_uc)
 
@@ -46,43 +53,45 @@ def step_init(ctx: dict) -> dict:
 
 
 def step_extract(ctx: dict) -> dict:
-    extract_uc: ExtractTablesUseCase = ctx["extract_uc"]
-    ctx["tables"] = extract_uc()
+    ctx["tables"] = ctx["extract_uc"]()
     return ctx
 
 
 def step_transform(ctx: dict) -> dict:
-    transform_uc: TransformJoinUseCase = ctx["transform_uc"]
-    ctx["result_df"] = transform_uc(ctx["tables"])
+    ctx["result_df"] = ctx["transform_uc"](ctx["tables"])
+    return ctx
+
+
+def step_read_convenios_from_templates(ctx: dict) -> dict:
+    mapping = ctx["read_convenios_uc"]()
+    ctx["dni_to_convenio"] = mapping.dni_to_convenio
+    ctx["dni_to_ccc"] = mapping.dni_to_ccc
     return ctx
 
 
 def step_filter_aggregate(ctx: dict) -> dict:
-    uc: FilterAndAggregateUseCase = ctx["filter_agg_uc"]
-    result = uc(ctx["result_df"])
+    result = ctx["filter_agg_uc"](ctx["result_df"], dni_to_convenio=ctx["dni_to_convenio"])
     ctx["detail_df"] = result.detail_df
     ctx["grouped_df"] = result.grouped_df
     return ctx
 
 
 def step_export_detail_and_grouped(ctx: dict) -> dict:
-    export_uc: ExportExcelUseCase = ctx["export_uc"]
-    export_result = export_uc(ctx["detail_df"], ctx["grouped_df"])
+    export_result = ctx["export_uc"](ctx["detail_df"], ctx["grouped_df"])
     ctx["detail_path"] = export_result.detail_path
     ctx["grouped_path"] = export_result.grouped_path
     return ctx
 
 
 def step_fill_templates_batch(ctx: dict) -> dict:
-    uc: FillTemplatesBatchUseCase = ctx["fill_templates_uc"]
-    result = uc(ctx["grouped_df"])
+    result = ctx["fill_templates_uc"](ctx["grouped_df"])
     ctx["template_outputs"] = result.outputs
+    ctx["template_skipped"] = result.skipped
     return ctx
 
 
 def step_close(ctx: dict) -> dict:
-    gateway: PostgresGateway = ctx["gateway"]
-    gateway.close()
+    ctx["gateway"].close()
     logging.getLogger("pg_to_excel").info("Conexiones cerradas.")
     return ctx
 
@@ -92,6 +101,7 @@ def main() -> int:
         Step(step_init, "init"),
         Step(step_extract, "extract"),
         Step(step_transform, "transform"),
+        Step(step_read_convenios_from_templates, "read_convenios"),
         Step(step_filter_aggregate, "filter_aggregate"),
         Step(step_export_detail_and_grouped, "export_detail_grouped"),
         Step(step_fill_templates_batch, "fill_templates_batch"),
@@ -106,10 +116,8 @@ def main() -> int:
         log.info("Excel resumen: %s", ctx["grouped_path"])
 
         outputs = ctx.get("template_outputs", [])
-        log.info("Plantillas generadas: %s", len(outputs))
-        for r in outputs:
-            log.info(" - %s | filas=%s | dnis_sin_datos=%s", r.output_path, r.filled_rows, r.missing_dnis)
-
+        skipped = ctx.get("template_skipped", [])
+        log.info("Plantillas generadas: %s | omitidas: %s", len(outputs), len(skipped))
         return 0
     except Exception as exc:  # pylint: disable=broad-except
         logging.getLogger("pg_to_excel").error("Error: %s", exc, exc_info=True)
