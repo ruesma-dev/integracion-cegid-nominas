@@ -30,6 +30,10 @@ class JoinConfig:
     def calendar(self) -> dict:
         return self.raw.get("calendar", {})
 
+    @property
+    def templates(self) -> dict:
+        return self.raw.get("templates", {})
+
 
 class Config:
     def __init__(self) -> None:
@@ -43,11 +47,10 @@ class Config:
         self.pg_schema = os.getenv("PG_SCHEMA", "public").strip()
 
         self.output_dir = os.getenv("OUTPUT_DIR", "output").strip()
-        self.output_filename = os.getenv("OUTPUT_FILENAME", "salida_nomina.xlsx").strip()
 
-        # Plantilla
-        self.template_path = os.getenv("TEMPLATE_PATH", "input/base.xlsx").strip()
-        self.template_sheet = os.getenv("TEMPLATE_SHEET", "").strip()  # vacío = activa
+        # Estos dos se mantienen (detalle/resumen) sin cambios en tu lógica previa
+        self.output_detail_filename = os.getenv("OUTPUT_FILENAME", "export_horas_extra_detalle.xlsx").strip()
+        self.output_grouped_filename = os.getenv("OUTPUT_FILENAME_GROUPED", "export_horas_extra_resumen.xlsx").strip()
 
         self.log_level = os.getenv("LOG_LEVEL", "INFO").strip().upper()
         self._join_config = self._load_join_config()
@@ -63,13 +66,21 @@ class Config:
     def join_config(self) -> JoinConfig:
         return self._join_config
 
-    def output_path_template(self) -> Path:
+    def output_path_detail(self) -> Path:
         out_dir = Path(self.output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        return out_dir / self.output_filename
+        return out_dir / self.output_detail_filename
 
-    def input_template_path(self) -> Path:
-        return Path(self.template_path)
+    def output_path_grouped(self) -> Path:
+        out_dir = Path(self.output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        return out_dir / self.output_grouped_filename
+
+    def output_templates_dir(self) -> Path:
+        subdir = (self.join_config.templates or {}).get("output_subdir", "plantillas")
+        out_dir = Path(self.output_dir) / str(subdir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        return out_dir
 
     @staticmethod
     def _load_join_config() -> JoinConfig:

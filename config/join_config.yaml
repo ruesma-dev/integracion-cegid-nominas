@@ -14,33 +14,35 @@ extract:
     year: 2025
     month: 12
 
+# Plantillas de entrada (múltiples)
+templates:
+  input_dir: input
+  pattern: "*.xlsx"           # por ejemplo: "base_*.xlsx" si quieres filtrar
+  output_subdir: plantillas   # se guardará en output/plantillas
+  sheet: ""                   # vacío = hoja activa; o nombre exacto de hoja
+
 calendar:
   holidays_by_year:
     "2025":
-      # Calendario Construcción Sevilla 2025 (incluye festivos y días inhábiles de convenio).
-      # Nota: el 16/04 (Miércoles Santo) es jornada reducida, no festivo, por eso NO se incluye.
-      # Fuente: Calendario Sevilla 2025. :contentReference[oaicite:0]{index=0}
-      - "2025-01-01"  # Año Nuevo
-      - "2025-01-06"  # Epifanía del Señor
-      - "2025-02-28"  # Día de Andalucía
-      - "2025-04-17"  # Jueves Santo
-      - "2025-04-18"  # Viernes Santo
-      - "2025-05-01"  # Día del Trabajador
-      - "2025-05-02"  # Día inhábil de convenio
-      - "2025-05-07"  # Miércoles de Feria (fiesta local)
-      - "2025-06-19"  # Corpus Christi
-      - "2025-06-20"  # Día inhábil de convenio
-      - "2025-08-15"  # Asunción de la Virgen María
-      - "2025-10-13"  # Fiesta Nacional (traslado de 12/10 domingo)
-      - "2025-11-01"  # Todos los Santos
-      - "2025-12-06"  # Constitución Española
-      - "2025-12-08"  # Inmaculada Concepción
-      - "2025-12-25"  # Natividad del Señor
-      - "2025-12-26"  # Día inhábil de convenio
-      - "2025-12-31"  # Día inhábil de convenio
-
+      - "2025-01-01"
+      - "2025-01-06"
+      - "2025-02-28"
+      - "2025-04-17"
+      - "2025-04-18"
+      - "2025-05-01"
+      - "2025-05-02"
+      - "2025-05-07"
+      - "2025-06-19"
+      - "2025-06-20"
+      - "2025-08-15"
+      - "2025-10-13"
+      - "2025-11-01"
+      - "2025-12-06"
+      - "2025-12-08"
+      - "2025-12-25"
+      - "2025-12-26"
+      - "2025-12-31"
     "2026":
-      # Calendario laboral 2026 Construcción Madrid (CCOO Hábitat). :contentReference[oaicite:1]{index=1}
       - "2026-01-01"
       - "2026-01-02"
       - "2026-01-05"

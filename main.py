@@ -8,8 +8,10 @@ from application.pipeline import Pipeline, Step
 from application.services.calendar_laboral import CalendarLaboral
 from application.use_cases.extract_tables_use_case import ExtractTablesUseCase
 from application.use_cases.filter_and_aggregate_use_case import FilterAndAggregateUseCase
-from application.use_cases.fill_template_excel_use_case import FillTemplateExcelUseCase
+from application.use_cases.export_excel_use_case import ExportExcelUseCase
 from application.use_cases.transform_join_use_case import TransformJoinUseCase
+from application.use_cases.fill_template_excel_use_case import FillTemplateExcelUseCase
+from application.use_cases.fill_templates_batch_use_case import FillTemplatesBatchUseCase
 from config.config import Config
 from infrastructure.pg_gateway import PostgresGateway
 
@@ -32,7 +34,13 @@ def step_init(ctx: dict) -> dict:
     ctx["extract_uc"] = ExtractTablesUseCase(gateway=gateway, config=config)
     ctx["transform_uc"] = TransformJoinUseCase(config=config)
     ctx["filter_agg_uc"] = FilterAndAggregateUseCase(calendar=calendar)
-    ctx["fill_template_uc"] = FillTemplateExcelUseCase(config=config)
+
+    # Mantiene los 2 excels previos (detalle/resumen)
+    ctx["export_uc"] = ExportExcelUseCase(config=config)
+
+    # Plantillas múltiples (batch)
+    fill_one_uc = FillTemplateExcelUseCase()
+    ctx["fill_templates_uc"] = FillTemplatesBatchUseCase(config=config, fill_uc=fill_one_uc)
 
     return ctx
 
@@ -57,12 +65,18 @@ def step_filter_aggregate(ctx: dict) -> dict:
     return ctx
 
 
-def step_fill_template(ctx: dict) -> dict:
-    uc: FillTemplateExcelUseCase = ctx["fill_template_uc"]
+def step_export_detail_and_grouped(ctx: dict) -> dict:
+    export_uc: ExportExcelUseCase = ctx["export_uc"]
+    export_result = export_uc(ctx["detail_df"], ctx["grouped_df"])
+    ctx["detail_path"] = export_result.detail_path
+    ctx["grouped_path"] = export_result.grouped_path
+    return ctx
+
+
+def step_fill_templates_batch(ctx: dict) -> dict:
+    uc: FillTemplatesBatchUseCase = ctx["fill_templates_uc"]
     result = uc(ctx["grouped_df"])
-    ctx["output_path"] = result.output_path
-    ctx["filled_rows"] = result.filled_rows
-    ctx["missing_dnis"] = result.missing_dnis
+    ctx["template_outputs"] = result.outputs
     return ctx
 
 
@@ -79,15 +93,23 @@ def main() -> int:
         Step(step_extract, "extract"),
         Step(step_transform, "transform"),
         Step(step_filter_aggregate, "filter_aggregate"),
-        Step(step_fill_template, "fill_template"),
+        Step(step_export_detail_and_grouped, "export_detail_grouped"),
+        Step(step_fill_templates_batch, "fill_templates_batch"),
         Step(step_close, "close"),
     )
 
     try:
         ctx = pipeline({})
         log = logging.getLogger("pg_to_excel")
-        log.info("Salida generada: %s", ctx["output_path"])
-        log.info("Filas actualizadas: %s | DNIs sin datos: %s", ctx["filled_rows"], ctx["missing_dnis"])
+
+        log.info("Excel detalle: %s", ctx["detail_path"])
+        log.info("Excel resumen: %s", ctx["grouped_path"])
+
+        outputs = ctx.get("template_outputs", [])
+        log.info("Plantillas generadas: %s", len(outputs))
+        for r in outputs:
+            log.info(" - %s | filas=%s | dnis_sin_datos=%s", r.output_path, r.filled_rows, r.missing_dnis)
+
         return 0
     except Exception as exc:  # pylint: disable=broad-except
         logging.getLogger("pg_to_excel").error("Error: %s", exc, exc_info=True)

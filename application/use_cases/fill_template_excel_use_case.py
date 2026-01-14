@@ -11,8 +11,6 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from config.config import Config
-
 log = logging.getLogger(__name__)
 
 DNI_RE = re.compile(r"^[0-9]{8}[A-Z]$|^[XYZ][0-9]{7}[A-Z]$", re.IGNORECASE)
@@ -27,28 +25,24 @@ class TemplateFillResult:
 
 class FillTemplateExcelUseCase:
     """
-    Rellena input/base.xlsx preservando formato:
-    - Casar filas por 'NIF' (DNI/NIE)
-    - Escribir:
-        Num Hora Extra Normal  <- laborable
-        Num Hora Extra Festiva <- festivo
+    Rellena UNA plantilla Excel preservando formato.
     """
 
-    def __init__(self, *, config: Config) -> None:
-        self._config = config
-
-    def __call__(self, grouped_df: pd.DataFrame) -> TemplateFillResult:
-        template_path = self._config.input_template_path()
+    def __call__(
+        self,
+        *,
+        template_path: Path,
+        output_path: Path,
+        grouped_df: pd.DataFrame,
+        sheet_name: str = "",
+    ) -> TemplateFillResult:
         if not template_path.exists():
             raise FileNotFoundError(f"No existe la plantilla: {template_path}")
 
-        output_path = self._config.output_path_template()
-
-        # aggregated per DNI (porque grouped_df puede venir por dni+cod)
         hours_by_dni = self._build_hours_by_dni(grouped_df)
 
         wb = load_workbook(template_path)
-        ws = self._select_sheet(wb)
+        ws = self._select_sheet(wb, sheet_name)
 
         header_row, col_nif, col_normal, col_festiva = self._find_header(ws)
 
@@ -66,63 +60,43 @@ class FillTemplateExcelUseCase:
                 continue
 
             normal, festiva = hours_by_dni[nif]
-
-            # Escribir valores (numéricos). Si quieres formato específico, se define en plantilla.
             ws.cell(row=r, column=col_normal).value = float(normal)
             ws.cell(row=r, column=col_festiva).value = float(festiva)
             filled += 1
 
         wb.save(output_path)
-        log.info("Plantilla rellenada. Filas actualizadas=%s, dnis sin datos=%s", filled, missing)
 
         return TemplateFillResult(output_path=output_path, filled_rows=filled, missing_dnis=missing)
 
     @staticmethod
     def _build_hours_by_dni(grouped_df: pd.DataFrame) -> Dict[str, Tuple[float, float]]:
-        """
-        Espera columnas:
-          - dni
-          - laborable
-          - festivo
-        Si hay más granularidad (dni+cod), se suma.
-        """
         required = {"dni", "laborable", "festivo"}
         missing = required - set(grouped_df.columns)
         if missing:
-            raise KeyError(f"Faltan columnas en grouped_df para rellenar plantilla: {sorted(missing)}")
+            raise KeyError(f"Faltan columnas en grouped_df: {sorted(missing)}")
 
         df = grouped_df.copy()
         df["dni"] = df["dni"].astype(str).str.strip().str.upper()
 
-        agg = (
-            df.groupby("dni", as_index=False)[["laborable", "festivo"]]
-            .sum()
-        )
+        agg = df.groupby("dni", as_index=False)[["laborable", "festivo"]].sum()
 
         out: Dict[str, Tuple[float, float]] = {}
         for _, row in agg.iterrows():
             out[str(row["dni"]).upper()] = (float(row["laborable"]), float(row["festivo"]))
         return out
 
-    def _select_sheet(self, wb):
-        if self._config.template_sheet:
-            if self._config.template_sheet not in wb.sheetnames:
+    @staticmethod
+    def _select_sheet(wb, sheet_name: str):
+        if sheet_name:
+            if sheet_name not in wb.sheetnames:
                 raise KeyError(
-                    f"TEMPLATE_SHEET='{self._config.template_sheet}' no existe. "
-                    f"Hojas disponibles: {wb.sheetnames}"
+                    f"Hoja '{sheet_name}' no existe. Hojas disponibles: {wb.sheetnames}"
                 )
-            return wb[self._config.template_sheet]
+            return wb[sheet_name]
         return wb.active
 
     @staticmethod
     def _find_header(ws: Worksheet) -> Tuple[int, int, int, int]:
-        """
-        Busca una fila que contenga las cabeceras:
-          - NIF
-          - Num Hora Extra Normal
-          - Num Hora Extra Festiva
-        Escanea las primeras 200 filas para ser robustos.
-        """
         target = {
             "NIF": None,
             "Num Hora Extra Normal": None,
@@ -140,11 +114,15 @@ class FillTemplateExcelUseCase:
                 row_vals[s] = c
 
             if all(k in row_vals for k in target.keys()):
-                return r, row_vals["NIF"], row_vals["Num Hora Extra Normal"], row_vals["Num Hora Extra Festiva"]
+                return (
+                    r,
+                    row_vals["NIF"],
+                    row_vals["Num Hora Extra Normal"],
+                    row_vals["Num Hora Extra Festiva"],
+                )
 
         raise RuntimeError(
-            "No se encontró la fila de cabecera con 'NIF', 'Num Hora Extra Normal' y 'Num Hora Extra Festiva'. "
-            "Revisa la plantilla base.xlsx."
+            "No se encontró cabecera con 'NIF', 'Num Hora Extra Normal' y 'Num Hora Extra Festiva'."
         )
 
     @staticmethod
